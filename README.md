@@ -7,7 +7,7 @@
 1. Склонуйте репозиторій:
 
     ```bash
-    git clone https://github.com/your-username/discord-music-bot.git
+    git clone https://github.com/Gabenoh/discord-music-bot.git
     ```
 
 2. Встановіть залежності:
@@ -31,7 +31,7 @@
     python bot.py
     ```
 
-2. Підключіть бота до вашого сервера Discord.
+2. Під'єднати бота до вашого сервера Discord.
    
 3. Використовуйте команду `!play <url>` для відтворення музики з YouTube.
 

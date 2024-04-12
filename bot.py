@@ -2,9 +2,9 @@ import discord
 from discord.ext import commands
 from yt_dlp import YoutubeDL
 import asyncio
-from token import TOKEN
+from utils.token import Token
 
-
+TOKEN = Token
 intents = discord.Intents.all()  # allowing all intents
 intents.members = True
 
@@ -130,6 +130,13 @@ async def resume(ctx):
         await voice_client.resume()
     else:
         await ctx.send("Бот нічого не відтворює. використай !play </url_for_music_video> команду")
+
+
+@bot.command(name='help', aliases=['h'])
+async def resume(ctx):
+    voice_client = ctx.voice_client
+    ctx.reply('Мої команди !')
+    ctx.send("Бот нічого не відтворює. використай !play </url_for_music_video> команду")
 
 
 if __name__ == '__main__':

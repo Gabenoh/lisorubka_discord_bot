@@ -17,10 +17,10 @@
     pip install -r requirements.txt
     ```
 
-3. Отримайте токен бота від Discord та збережіть його в файлі `token.py`:
+3. Отримайте токен бота від Discord та збережіть його в файлі `utils/token.py`:
 
     ```python
-    TOKEN = 'your-bot-token-here'
+    Token = 'your-bot-token-here'
     ```
 
 ## Використання

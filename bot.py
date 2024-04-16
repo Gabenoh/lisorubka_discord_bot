@@ -55,6 +55,7 @@ async def play_music(ctx, url):
         await ctx.send(f"Помилка під час відтворення музики: {e}")
 
 
+@bot.command(name="next", aliases=['n', 'н', 'наступний'])
 async def play_next(ctx):
     voice_client = ctx.voice_client
     # Перевірка, чи аудіо не відтворюється
@@ -88,11 +89,6 @@ async def stop(ctx):
         voice_client.stop()
         await asyncio.sleep(2)
         await voice_client.disconnect()
-
-
-@bot.command(name="next", aliases=['n', 'н', 'наступний'])
-async def next(ctx):
-    await play_next(ctx)
 
 
 @bot.command(name='pause', aliases=['пауза'], help='This command pauses the song')

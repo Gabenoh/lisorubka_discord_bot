@@ -12,7 +12,6 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Створення змінної для зберігання URL-адреси
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
-
 queue = asyncio.Queue()
 
 
@@ -58,14 +57,13 @@ async def play_music(ctx, url):
 
 async def play_next(ctx):
     voice_client = ctx.voice_client
-
     # Перевірка, чи аудіо не відтворюється
     if not voice_client.is_playing():
         # Якщо черга не порожня, відтворюємо наступне відео
         if not queue.empty():
             url = await queue.get()
-            voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
-                              after=lambda e: bot.loop.create_task(play_next(ctx)))
+            sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), volume=0.25)
+            voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
         else:
             # Якщо черга порожня, відключаємося від голосового каналу
             await voice_client.disconnect()
@@ -74,8 +72,8 @@ async def play_next(ctx):
         await asyncio.sleep(5)
         if not queue.empty():
             url = await queue.get()
-            voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
-                              after=lambda e: bot.loop.create_task(play_next(ctx)))
+            sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), volume=0.25)
+            voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
 
 
 @bot.command(name="play", aliases=['p', 'п', 'П', 'P'])
@@ -97,6 +95,24 @@ async def next(ctx):
     await play_next(ctx)
 
 
+@bot.command(name='pause', aliases=['пауза'], help='This command pauses the song')
+async def pause(ctx):
+    voice_client = ctx.voice_client
+    if voice_client is not None and voice_client.is_playing():
+        voice_client.pause()
+    else:
+        await ctx.send("На данний момент нічого не відтворюється")
+
+
+@bot.command(name='resume', aliases=['старт', 'start'], help='Resumes the song')
+async def resume(ctx):
+    voice_client = ctx.voice_client
+    if voice_client is not None and voice_client.is_paused():
+        voice_client.resume()
+    else:
+        await ctx.send("Бот нічого не відтворює. використай !play </url_for_music_video> команду")
+
+
 @bot.command(name="volume", aliases=['vol'])
 async def set_volume(ctx, volume: int):
     voice_client = ctx.voice_client
@@ -112,31 +128,6 @@ async def set_volume(ctx, volume: int):
             await ctx.send("Будь ласка, вкажіть значення гучності від 0 до 100.")
     else:
         await ctx.send("Бот не підключений до голосового каналу.")
-
-
-@bot.command(name='pause', aliases=['пауза'], help='This command pauses the song')
-async def pause(ctx):
-    voice_client = ctx.voice_client
-    if voice_client is not None and voice_client.is_playing():
-        await voice_client.pause()
-    else:
-        await ctx.send("На данний момент нічого не відтворюється")
-
-
-@bot.command(name='resume', aliases=['старт', 'start'], help='Resumes the song')
-async def resume(ctx):
-    voice_client = ctx.voice_client
-    if voice_client is not None and voice_client.is_paused():
-        await voice_client.resume()
-    else:
-        await ctx.send("Бот нічого не відтворює. використай !play </url_for_music_video> команду")
-
-
-@bot.command(name='help', aliases=['h'])
-async def resume(ctx):
-    voice_client = ctx.voice_client
-    ctx.reply('Мої команди !')
-    ctx.send("Бот нічого не відтворює. використай !play </url_for_music_video> команду")
 
 
 if __name__ == '__main__':

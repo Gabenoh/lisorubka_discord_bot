@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from yt_dlp import YoutubeDL
 import asyncio
+from pytube import Playlist
 from utils.token import Token
 
 TOKEN = Token
@@ -40,9 +41,8 @@ async def play_music(ctx, url):
             else:
                 info = ydl.extract_info(f"ytsearch:{url}", download=False)
                 stream = info['entries'][0]['requested_formats'][1]['url']
-
-            title = info['title']
-            await ctx.send(f"Додано до черги: {title}")
+                title = info['title']
+                await ctx.send(f"Додано до черги: {title}")
 
             # Додавання URL-адреси відео до черги
             await queue.put(stream)
@@ -124,6 +124,21 @@ async def set_volume(ctx, volume: int):
             await ctx.send("Будь ласка, вкажіть значення гучності від 0 до 100.")
     else:
         await ctx.send("Бот не підключений до голосового каналу.")
+
+
+@bot.command(name="playlist", aliases=['pl', 'пл', 'плейлист'])
+async def playlist(ctx, playlist_url):
+    try:
+        playlist_url_list = Playlist(playlist_url)
+        if len(playlist_url_list) >= 1:
+            for url in playlist_url_list:
+                await play_music(ctx, url)
+                await asyncio.sleep(3)
+        else:
+            await ctx.send(f"Плейлист якийсь поломаний в ньому немає треків.")
+        await ctx.send(f"Плейлист з {len(playlist_url_list)} треків доданий у чергу.")
+    except Exception as e:
+        await ctx.send(f"Помилка при додаванні плейлисту: {e}")
 
 
 if __name__ == '__main__':

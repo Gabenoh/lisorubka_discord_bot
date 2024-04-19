@@ -31,21 +31,19 @@ async def play_music(ctx, url):
         print(e)
 
     voice_client = ctx.voice_client
-
     try:
         ydl_opts = {'noplaylist': True, 'quiet': True}
         with YoutubeDL(ydl_opts) as ydl:
             if 'https:' in url:
                 info = ydl.extract_info(url, download=False)
+                title = info['title']
                 stream = info['requested_formats'][1]['url']
             else:
                 info = ydl.extract_info(f"ytsearch:{url}", download=False)
                 stream = info['entries'][0]['requested_formats'][1]['url']
-                title = info['title']
-                await ctx.send(f"Додано до черги: {title}")
-
+                title = info['entries'][0]['title']
             # Додавання URL-адреси відео до черги
-            await queue.put(stream)
+            await queue.put([stream, title])
 
             # Якщо бот не відтворює відео наразі, почніть відтворення
             if not voice_client.is_playing():
@@ -55,39 +53,52 @@ async def play_music(ctx, url):
         await ctx.send(f"Помилка під час відтворення музики: {e}")
 
 
-@bot.command(name="next", aliases=['n', 'н', 'наступний'])
 async def play_next(ctx):
     voice_client = ctx.voice_client
     # Перевірка, чи аудіо не відтворюється
-    if not voice_client.is_playing():
+    if voice_client.is_playing():
+        voice_client.stop()
+        await asyncio.sleep(3)
+        if not queue.empty():
+            track_url_title = await queue.get()
+            await ctx.send(f'Зараз грає - {track_url_title[1]}')
+            sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
+                                                  volume=0.15)
+            voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
+        else:
+            ctx.send('У черзі закінчились треки')
+            await voice_client.disconnect()
+    else:
         # Якщо черга не порожня, відтворюємо наступне відео
         if not queue.empty():
-            url = await queue.get()
-            sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), volume=0.25)
+            track_url_title = await queue.get()
+            await ctx.send(f'Зараз грає - {track_url_title[1]}')
+            sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
+                                                  volume=0.15)
             voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
         else:
             # Якщо черга порожня, відключаємося від голосового каналу
             await voice_client.disconnect()
-    else:
-        voice_client.stop()
-        await asyncio.sleep(5)
-        if not queue.empty():
-            url = await queue.get()
-            sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), volume=0.25)
-            voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
 
 
 @bot.command(name="play", aliases=['p', 'п', 'П', 'P'])
 async def play(ctx, *, url):
+    await clear_messages(ctx)
     await play_music(ctx, url)
+
+
+@bot.command(name="next", aliases=['n', 'н', 'наступний'])
+async def next_track(ctx):
+    await clear_messages(ctx, 1)
+    ctx.voice_client.stop()
 
 
 @bot.command(name="stop", aliases=['стоп', 'с', 's'])
 async def stop(ctx):
     voice_client = ctx.voice_client
+    await clear_messages(ctx, 1)
     if voice_client and voice_client.is_playing:
         voice_client.stop()
-        await asyncio.sleep(2)
         await voice_client.disconnect()
 
 
@@ -128,17 +139,25 @@ async def set_volume(ctx, volume: int):
 
 @bot.command(name="playlist", aliases=['pl', 'пл', 'плейлист'])
 async def playlist(ctx, playlist_url):
+    await clear_messages(ctx)
     try:
         playlist_url_list = Playlist(playlist_url)
-        if len(playlist_url_list) >= 1:
-            for url in playlist_url_list:
+        if len(playlist_url_list) >= 2:
+            for url in playlist_url_list.video_urls[:20]:
                 await play_music(ctx, url)
-                await asyncio.sleep(3)
+                await asyncio.sleep(1)
         else:
             await ctx.send(f"Плейлист якийсь поломаний в ньому немає треків.")
-        await ctx.send(f"Плейлист з {len(playlist_url_list)} треків доданий у чергу.")
+            await play_music(ctx, playlist_url)
+            return
+        await ctx.send(f"Плейлист {playlist_url_list.title} з {len(playlist_url_list)} треків доданий у чергу.")
     except Exception as e:
-        await ctx.send(f"Помилка при додаванні плейлисту: {e}")
+        print(f"Помилка при додаванні плейлисту: {e}")
+
+
+@bot.command(name="clear", aliases=["clean", "delete", 'видали', 'очисти'])
+async def clear_messages(ctx, amount: int = 0):
+    await ctx.channel.purge(limit=amount + 1)  # +1, щоб видалити ще й команду
 
 
 if __name__ == '__main__':

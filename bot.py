@@ -12,7 +12,8 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 # Створення змінної для зберігання URL-адреси
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
-
+global global_vol
+global_vol = 0.15
 queue = asyncio.Queue()
 
 
@@ -54,6 +55,7 @@ async def play_music(ctx, url):
 
 
 async def play_next(ctx):
+    global global_vol
     voice_client = ctx.voice_client
     # Перевірка, чи аудіо не відтворюється
     if voice_client.is_playing():
@@ -63,7 +65,7 @@ async def play_next(ctx):
             track_url_title = await queue.get()
             await ctx.send(f'Зараз грає - {track_url_title[1]}')
             sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
-                                                  volume=0.15)
+                                                  volume=global_vol)
             voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
         else:
             ctx.send('У черзі закінчились треки')
@@ -71,13 +73,15 @@ async def play_next(ctx):
     else:
         # Якщо черга не порожня, відтворюємо наступне відео
         if not queue.empty():
+            await clear_messages(ctx, 0)
             track_url_title = await queue.get()
             await ctx.send(f'Зараз грає - {track_url_title[1]}')
             sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
-                                                  volume=0.15)
+                                                  volume=global_vol)
             voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
         else:
             # Якщо черга порожня, відключаємося від голосового каналу
+            ctx.send('У черзі закінчились треки')
             await voice_client.disconnect()
 
 
@@ -120,8 +124,9 @@ async def resume(ctx):
         await ctx.send("Бот нічого не відтворює. використай !play </url_for_music_video> команду")
 
 
-@bot.command(name="volume", aliases=['vol'])
-async def set_volume(ctx, volume: int):
+@bot.command(name="volume", aliases=['vol', 'з'])
+async def set_volume(ctx, volume: int = 15):
+    global global_vol
     voice_client = ctx.voice_client
     if voice_client:
         # Перевіряємо, чи вказане значення гучності знаходиться в межах від 0 до 100
@@ -130,6 +135,7 @@ async def set_volume(ctx, volume: int):
             volume = volume / 100
             # Встановлюємо гучність для голосового каналу
             voice_client.source.volume = volume
+            global_vol = volume
             await ctx.send(f"Гучність бота була встановлена на {volume * 100}%")
         else:
             await ctx.send("Будь ласка, вкажіть значення гучності від 0 до 100.")
@@ -141,16 +147,17 @@ async def set_volume(ctx, volume: int):
 async def playlist(ctx, playlist_url):
     await clear_messages(ctx)
     try:
-        playlist_url_list = Playlist(playlist_url)
+        playlist_url = Playlist(playlist_url)
+        playlist_url_list = list(playlist_url)
         if len(playlist_url_list) >= 2:
-            for url in playlist_url_list.video_urls[:20]:
+            for url in playlist_url_list[:40]:
                 await play_music(ctx, url)
                 await asyncio.sleep(1)
         else:
             await ctx.send(f"Плейлист якийсь поломаний в ньому немає треків.")
             await play_music(ctx, playlist_url)
             return
-        await ctx.send(f"Плейлист {playlist_url_list.title} з {len(playlist_url_list)} треків доданий у чергу.")
+        await ctx.send(f"Плейлист {playlist_url.title} з {len(playlist_url_list)} треків доданий у чергу.")
     except Exception as e:
         print(f"Помилка при додаванні плейлисту: {e}")
 

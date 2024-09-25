@@ -13,7 +13,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Створення змінної для зберігання URL-адреси
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 global global_vol
-global_vol = 0.15
+global_vol = 0.10
 queue = asyncio.Queue()
 
 
@@ -37,7 +37,7 @@ async def play_music(ctx, url):
         with YoutubeDL(ydl_opts) as ydl:
             if 'https:' in url:
                 info = ydl.extract_info(url, download=False)
-                title = info['title']
+                title = info['channel'] +' - ' + info['title']
                 stream = info['requested_formats'][1]['url']
             else:
                 info = ydl.extract_info(f"ytsearch:{url}", download=False)
@@ -63,7 +63,7 @@ async def play_next(ctx):
         await asyncio.sleep(3)
         if not queue.empty():
             track_url_title = await queue.get()
-            await ctx.send(f'Зараз грає - {track_url_title[1]}')
+            await ctx.send(f'Зараз грає : {track_url_title[1]}')
             sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
                                                   volume=global_vol)
             voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
@@ -75,7 +75,7 @@ async def play_next(ctx):
         if not queue.empty():
             await clear_messages(ctx, 0)
             track_url_title = await queue.get()
-            await ctx.send(f'Зараз грає - {track_url_title[1]}')
+            await ctx.send(f'Зараз грає : {track_url_title[1]}')
             sourse = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
                                                   volume=global_vol)
             voice_client.play(sourse, after=lambda e: bot.loop.create_task(play_next(ctx)))
@@ -125,7 +125,7 @@ async def resume(ctx):
 
 
 @bot.command(name="volume", aliases=['vol', 'з'])
-async def set_volume(ctx, volume: int = 15):
+async def set_volume(ctx, volume: int = 10):
     global global_vol
     voice_client = ctx.voice_client
     if voice_client:
@@ -142,13 +142,14 @@ async def set_volume(ctx, volume: int = 15):
     else:
         await ctx.send("Бот не підключений до голосового каналу.")
 
-
+'''
 @bot.command(name="playlist", aliases=['pl', 'пл', 'плейлист'])
 async def playlist(ctx, playlist_url):
     await clear_messages(ctx)
     try:
         playlist_url = Playlist(playlist_url)
         playlist_url_list = list(playlist_url)
+        print(playlist_url_list)
         if len(playlist_url_list) >= 2:
             for url in playlist_url_list[:40]:
                 await play_music(ctx, url)
@@ -159,8 +160,50 @@ async def playlist(ctx, playlist_url):
             return
         await ctx.send(f"Плейлист {playlist_url.title} з {len(playlist_url_list)} треків доданий у чергу.")
     except Exception as e:
-        print(f"Помилка при додаванні плейлисту: {e}")
+        print(f"Помилка при додаванні плейлисту: {e}")'''
 
+
+@bot.command(name="playlist", aliases=['pl', 'пл', 'плейлист'])
+async def playlist(ctx, playlist_url):
+    await clear_messages(ctx)
+    ydl_opts = {
+        'extract_flat': True,
+        'quiet': True,
+        'skip_download': True,
+        'force_generic_extractor': True,
+    }
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(playlist_url, download=False)
+            print(info_dict)
+            if 'entries' in info_dict:
+                # Перевіряємо, чи є в плейлисті треки
+                playlist_entries = info_dict['entries']
+                if len(playlist_entries) > 0:
+                    await ctx.send(f"Плейлист {info_dict['title']} містить {len(playlist_entries[:25])} треків. Додаємо до черги...")
+                    for entry in playlist_entries[:25]:  # Обмежимо до 10 треків для запобігання перевантаження
+                        if 'url' in entry:
+                            track_url = entry['url']
+                            await play_music(ctx, track_url)
+                            await asyncio.sleep(1)
+                    await ctx.send(f"Плейлист {info_dict['title']} з перших {len(playlist_entries[:25])} треків. Додано до черги...")
+                    print(playlist_entries[:10])
+                else:
+                    await ctx.send(f"Плейлист порожній або не вдалося знайти треки.")
+            elif info_dict['ie_key'] == 'YoutubeTab':
+                playlist_url = Playlist(playlist_url)
+                playlist_url_list = list(playlist_url)
+                print(playlist_url_list)
+                if len(playlist_url_list) >= 2:
+                    for url in playlist_url_list[:25]:
+                        await play_music(ctx, url)
+                        await asyncio.sleep(1)
+            else:
+                await ctx.send("Не вдалося знайти треки в плейлисті.")
+    except Exception as e:
+        await ctx.send(f"Помилка при додаванні плейлисту: {e}")
+        print(f"Помилка при додаванні плейлисту: {e}")
 
 @bot.command(name="clear", aliases=["clean", "delete", 'видали', 'очисти'])
 async def clear_messages(ctx, amount: int = 0):

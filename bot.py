@@ -5,11 +5,22 @@ import asyncio
 from pytube import Playlist
 from utils.token import Token
 
+
+class MyBot(commands.Bot):
+    async def on_ready(self):
+        # Синхронізація слеш-команд із Discord API
+        await self.tree.sync()
+        print(f"Logged in as {self.user}")
+
+
 TOKEN = Token
-intents = discord.Intents.all()  # allowing all intents
+intents = discord.Intents.all()
 intents.members = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Замість стандартного створення бота, використовуємо новий клас
+bot = MyBot(command_prefix='!', intents=intents)
+
+
 # Створення змінної для зберігання URL-адреси
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 global global_vol
@@ -45,12 +56,10 @@ async def play_music(ctx, url):
                 info = ydl.extract_info(url, download=False)
                 title = info['channel'] +' - ' + info['title']
                 stream = info['requested_formats'][1]['url']
-                print(f'2{stream=}')
             else:
                 info = ydl.extract_info(f"ytsearch:{url}", download=False)
                 stream = info['entries'][0]['requested_formats'][1]['url']
                 title = info['entries'][0]['title']
-                print(f'4{stream=}')
             # Додавання URL-адреси відео до черги
             await queue.put([stream, title])
 
@@ -66,6 +75,7 @@ async def play_next(ctx):
     global global_vol
     voice_client = ctx.voice_client
     if not queue.empty():
+        await clear_messages(ctx)
         track_url_title = await queue.get()
         await ctx.send(f'Зараз грає : {track_url_title[1]}')
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(track_url_title[0], **FFMPEG_OPTIONS),
@@ -76,10 +86,19 @@ async def play_next(ctx):
         await voice_client.disconnect()
 
 
+
 @bot.command(name="play", aliases=['p', 'п', 'П', 'P'])
 async def play(ctx, *, url):
     await clear_messages(ctx)
     await play_music(ctx, url)
+
+
+@bot.tree.command(name="play", description="Відтворити музику за URL")
+async def slash_play(interaction: discord.Interaction, url: str):
+    ctx = await bot.get_context(interaction)
+    await clear_messages(ctx)
+    await play_music(ctx, url)
+    await interaction.response.send_message(f"Відтворюю: {url}")
 
 
 @bot.command(name="next", aliases=['n', 'н', 'наступний'])

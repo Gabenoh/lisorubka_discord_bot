@@ -98,7 +98,6 @@ async def play_music(ctx, url):
     except Exception as e:
         logger.error(f"Помилка під час підключення до голосового каналу на сервері {ctx.guild.name}: {e}")
         return
-
     voice_client = ctx.voice_client
     try:
         # Оновлені налаштування yt-dlp для обходу обмежень
@@ -116,7 +115,7 @@ async def play_music(ctx, url):
             'retries': 10,
             'fragment_retries': 10,
             # Додамо cookie файл, якщо він є
-            # 'cookiefile': '/path/to/cookies.txt',  # Розкоментуйте і вкажіть шлях до файлу з cookies, якщо маєте
+            'cookiefile': '/home/galmed/discord_bot/cookies.txt',
             # Випадковий User-Agent та інші заголовки для імітації реального користувача
             'http_headers': get_random_headers()
         }

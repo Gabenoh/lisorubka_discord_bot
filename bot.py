@@ -397,6 +397,5 @@ async def clear_messages(ctx, amount: int = 0):
         logger.error(
             f"Бот не має дозволу на видалення повідомлень в каналі '{ctx.channel.name}' на сервері '{ctx.guild.name}'.")
 
-
 if __name__ == '__main__':
     bot.run(TOKEN)

@@ -384,7 +384,6 @@ async def slash_playlist(interaction: discord.Interaction, playlist_url: str):
         logger.error(f"Помилка при обробці плейлиста '{playlist_url}' на сервері {ctx.guild.name}: {e}")
         await channel.send(f"Помилка при додаванні плейлисту: {e}")
 
-
 @bot.command(name="clear", aliases=["clean", "delete", 'видали', 'очисти'])
 async def clear_messages(ctx, amount: int = 0):
     try:

@@ -61,16 +61,57 @@ async def play_music(ctx, url):
 
     voice_client = ctx.voice_client
     try:
-        ydl_opts = {'noplaylist': True, 'quiet': True}
+        # ВИПРАВЛЕННЯ: Оновлені параметри yt-dlp для обходу обмежень YouTube
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,  # Приховуємо більшість виводу
+            'no_warnings': True,  # Приховуємо попередження
+            'ignoreerrors': False,
+            'default_search': 'auto',
+            'source_address': '0.0.0.0',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios', 'android'],  # iOS клієнт часто працює краще
+                    'skip': ['hls', 'dash'],  # Пропускаємо проблемні формати
+                }
+            },
+        }
+
         with YoutubeDL(ydl_opts) as ydl:
             if 'https:' in url:
                 info = ydl.extract_info(url, download=False)
-                title = info['channel'] + ' - ' + info['title']
-                stream = info['requested_formats'][1]['url']
+                # Безпечне отримання назви каналу та треку
+                if isinstance(info, dict):
+                    channel = info.get('channel') or info.get('uploader', 'Unknown')
+                    title = f"{channel} - {info.get('title', 'Unknown')}"
+                    # Пробуємо отримати URL з різних джерел
+                    stream = info.get('url') or info.get('requested_downloads', [{}])[0].get('url')
+                    if not stream and 'formats' in info:
+                        # Знаходимо перший аудіоформат
+                        for fmt in info['formats']:
+                            if fmt.get('acodec') != 'none' and fmt.get('url'):
+                                stream = fmt['url']
+                                break
+                else:
+                    raise Exception("Не вдалося отримати інформацію про відео")
             else:
                 info = ydl.extract_info(f"ytsearch:{url}", download=False)
-                stream = info['entries'][0]['requested_formats'][1]['url']
-                title = info['entries'][0]['title']
+                if 'entries' in info and len(info['entries']) > 0:
+                    video_info = info['entries'][0]
+                    title = video_info.get('title', 'Unknown')
+                    stream = video_info.get('url')
+                    if not stream and 'formats' in video_info:
+                        for fmt in video_info['formats']:
+                            if fmt.get('acodec') != 'none' and fmt.get('url'):
+                                stream = fmt['url']
+                                break
+                else:
+                    raise Exception("Не знайдено результатів пошуку")
+
+            if not stream:
+                raise Exception("Не вдалося отримати URL потоку")
+
             await queue.put([stream, title])
             logger.info(f"До черги додано трек '{title}' ({url}) на сервері '{ctx.guild.name}'.")
 
@@ -108,29 +149,21 @@ async def play(ctx, *, url):
 
 @bot.tree.command(name="play", description="Відтворити музику за URL")
 async def slash_play(interaction: discord.Interaction, url: str):
-    # Respond immediately to the interaction
     await interaction.response.send_message(f"Додаю до черги: {url}")
     logger.info(
         f"Користувач {interaction.user.name} запустив відтворення '{url}' через слеш-команду на сервері '{interaction.guild.name}'.")
 
-    # Get context and process the command
     ctx = await bot.get_context(interaction)
-
-    # Process the music - this can take time, but we've already responded to the interaction
     await play_music(ctx, url)
 
 
 @bot.tree.command(name="search", description="Знайти музику в ютуб")
 async def slash_search(interaction: discord.Interaction, name: str):
-    # Respond immediately to the interaction
     await interaction.response.send_message(f"Шукаю та додаю до черги: {name}")
     logger.info(
         f"Користувач {interaction.user.name} запустив пошук '{name}' через слеш-команду на сервері '{interaction.guild.name}'.")
 
-    # Get context and process the command
     ctx = await bot.get_context(interaction)
-
-    # Process the search - this can take time, but we've already responded to the interaction
     await play_music(ctx, name)
 
 
@@ -276,11 +309,18 @@ async def playlist(ctx, playlist_url):
     if not voice_client:
         return
 
+    # ВИПРАВЛЕННЯ: Оновлені параметри для плейлистів
     ydl_opts = {
         'extract_flat': True,
         'quiet': True,
+        'no_warnings': True,
         'skip_download': True,
-        'force_generic_extractor': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'android'],
+                'skip': ['hls', 'dash'],
+            }
+        },
     }
 
     try:
@@ -325,12 +365,9 @@ async def playlist(ctx, playlist_url):
 
 @bot.tree.command(name="playlist", description="Додати плейлист до черги")
 async def slash_playlist(interaction: discord.Interaction, playlist_url: str):
-    # Immediately respond to the interaction
     await interaction.response.send_message(f"Обробка плейлиста: {playlist_url}")
 
     ctx = await bot.get_context(interaction)
-
-    # Create a channel for further updates
     channel = interaction.channel
 
     voice_client = await connect_to_voice(ctx)
@@ -341,8 +378,14 @@ async def slash_playlist(interaction: discord.Interaction, playlist_url: str):
     ydl_opts = {
         'extract_flat': True,
         'quiet': True,
+        'no_warnings': True,
         'skip_download': True,
-        'force_generic_extractor': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'android'],
+                'skip': ['hls', 'dash'],
+            }
+        },
     }
 
     try:
@@ -384,6 +427,7 @@ async def slash_playlist(interaction: discord.Interaction, playlist_url: str):
         logger.error(f"Помилка при обробці плейлиста '{playlist_url}' на сервері {ctx.guild.name}: {e}")
         await channel.send(f"Помилка при додаванні плейлисту: {e}")
 
+
 @bot.command(name="clear", aliases=["clean", "delete", 'видали', 'очисти'])
 async def clear_messages(ctx, amount: int = 0):
     try:
@@ -396,6 +440,15 @@ async def clear_messages(ctx, amount: int = 0):
     except discord.errors.Forbidden:
         logger.error(
             f"Бот не має дозволу на видалення повідомлень в каналі '{ctx.channel.name}' на сервері '{ctx.guild.name}'.")
+
+
+@bot.tree.command(name="clear", description="Видалити певну кількість повідомлень")
+async def slash_clear_messages(interaction: discord.Interaction, amount: int = 0):
+    await interaction.response.defer(ephemeral=True)
+
+    ctx = await bot.get_context(interaction)
+
+    await clear_messages(ctx, amount)
 
 if __name__ == '__main__':
     bot.run(TOKEN)
